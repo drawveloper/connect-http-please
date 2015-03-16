@@ -4,19 +4,15 @@
   "version": "0.1.1",
   "repository": {
     "type": "git",
-    "url": "https://github.com/gadr/connect-http-please.git"
+    "url": "https://github.com/firstdoit/connect-http-please.git"
   },
-  "main": "index.coffee",
-  "engines": {
-    "node": "0.10.x",
-    "npm": "1.2.x"
-  },
+  "main": "index.js",
   "scripts": {
-    "start": "coffee index.coffee",
+    "prepublish": "coffee --compile index.coffee",
+    "watch": "coffee --watch --compile index.coffee",
     "test": "mocha --compilers coffee:coffee-script/register --reporter spec specs/**",
     "test-watch": "mocha --watch --compilers coffee:coffee-script/register --reporter spec specs/**"
   },
-  "preferGlobal": "true",
   "dependencies": {
     "coffee-script": "1.7.*",
     "colors": "~0.6.2"
