@@ -24,9 +24,18 @@ module.exports = (options = {})->
       res.writeHead = res.end = ->
 
       redirectStatusCode = statusCode in REDIRECT_STATUS_CODES
-      location = res.getHeader('location')
-      identicalLocation = location?.indexOf('https://'+ req.headers.host + req.url) is 0
-      return false if not (redirectStatusCode and identicalLocation)
+      return false unless redirectStatusCode
+
+      switch arguments.length
+        when 3 then headers = arguments[2]
+        when 2 then headers = arguments[1]
+        else headers = null
+
+      location = headers?.location or res.getHeader('location')
+      return false unless location
+
+      identicalLocation = location.indexOf('https://'+ req.headers.host + req.url) is 0
+      return false unless identicalLocation
 
       # This is a redirect to the exact same url, except with HTTPS protocol
       console.verbose "HTTPlease: follow redirect to", location.yellow
@@ -51,7 +60,7 @@ module.exports = (options = {})->
       
     # Overwrite writeHead to detect redirect
     res.writeHead = ->
-      unless handleRedirect arguments[0]
+      unless handleRedirect.apply this, arguments
         restore()
         writeHead.apply res, arguments
 

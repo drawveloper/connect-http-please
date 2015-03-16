@@ -10,8 +10,8 @@
   "scripts": {
     "prepublish": "coffee --compile index.coffee",
     "watch": "coffee --watch --compile index.coffee",
-    "test": "mocha --compilers coffee:coffee-script/register --reporter spec specs/**",
-    "test-watch": "mocha --watch --compilers coffee:coffee-script/register --reporter spec specs/**"
+    "test": "mocha --compilers coffee:coffee-script/register --reporter spec specs/*.spec.coffee",
+    "test-watch": "mocha --watch --compilers coffee:coffee-script/register --reporter spec specs/*.spec.coffee"
   },
   "dependencies": {
     "coffee-script": "1.7.*",

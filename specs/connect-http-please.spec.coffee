@@ -4,6 +4,7 @@ connect = require 'connect'
 http = require 'http'
 https = require 'https'
 request = require 'request'
+fs = require 'fs'
 require 'colors'
 
 generateEndHandler = -> (req, res) -> 
@@ -17,12 +18,7 @@ generateWriteHeadEndHandler = (statusCode = 200) -> (req, res) ->
   res.writeHead statusCode, {'location': 'https://' + req.headers.host + req.url}
   res.end 'qux'
 
-generateWriteHeadWriteEndHandler = (statusCode = 200) -> (req, res) -> 
-  res.writeHead statusCode, {'location': 'https://' + req.headers.host + req.url}
-  res.write 'bar'
-  res.end 'qux'
-
-notRedirectTestBody = (handler, expectedBody = 'qux', expectedStatusCode = 200) ->
+testBody = (handler, expectedBody = 'qux', expectedStatusCode = 200) ->
   (done) ->
     server = http.createServer(connect().use(httplease()).use(handler)).listen(8000)
     request 'http://localhost:8000', (err, res, body) ->
@@ -32,41 +28,39 @@ notRedirectTestBody = (handler, expectedBody = 'qux', expectedStatusCode = 200) 
       server.close()
       done()
       
-redirectTestBody = (handler) ->
-  (done) ->
-    server = http.createServer(connect().use(httplease()).use(handler)).listen(8000)
-    options =
-      uri: 'http://localhost:8000/'
-      headers:
-        host: 'google.starttest.com'
-
-    request 'https://google.starttest.com/', (googErr, googRes, googBody) ->
-      return done googErr if googErr
-      request options, (err, res, body) ->
-        return done err if err
-        expect(res.statusCode).to.equal 200
-        expect(body).to.equal googBody
-        server.close()
-        done()
-      
 describe 'HTTP Please', ->
 
   describe 'when handling 2xx responses should do nothing', ->
-    it 'when server calls only end', notRedirectTestBody(generateEndHandler())
-    it 'when server calls write and end', notRedirectTestBody(generateWriteEndHandler(), 'barqux')
-    it 'when server calls writeHead and end', notRedirectTestBody(generateWriteHeadEndHandler())
-    it 'when server calls writeHead, write and end', notRedirectTestBody(generateWriteHeadWriteEndHandler(), 'barqux')
+    it 'when server calls only end', testBody(generateEndHandler())
+    it 'when server calls write and end', testBody(generateWriteEndHandler(), 'barqux')
+    it 'when server calls writeHead and end', testBody(generateWriteHeadEndHandler())
 
   describe 'when handling 3xx responses should redirect', ->
-    @timeout 5000
-    
-    it 'should redirect when server calls writeHead and end', redirectTestBody(generateWriteHeadEndHandler(301))
-    it 'should redirect when server calls writeHead, write and end', redirectTestBody(generateWriteHeadWriteEndHandler(301))
-    
+    it 'when server calls writeHead and end', (done) ->
+      httpsOptions =
+        key: fs.readFileSync('specs/key.pem')
+        cert: fs.readFileSync('specs/key-cert.pem')
+
+      httpsServer = https.createServer(httpsOptions, (req, res) ->
+        res.writeHead(200)
+        res.end("hello world\n")
+      ).listen(443)
+
+      handler = generateWriteHeadEndHandler(301)
+
+      server = http.createServer(connect().use(httplease()).use(handler)).listen(80)
+
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
+      request 'http://localhost', (err, res, body) ->
+        return done err if err
+        expect(res.statusCode).to.equal 200
+        expect(body).to.equal "hello world\n"
+        httpsServer.close()
+        server.close()
+        done()
+
   describe 'when handling 4xx responses should do nothing', ->
-    it 'when server calls writeHead and end', notRedirectTestBody(generateWriteHeadEndHandler(404), 'qux', 404)
-    it 'when server calls writeHead, write and end', notRedirectTestBody(generateWriteHeadWriteEndHandler(404), 'barqux', 404)
-  
+    it 'when server calls writeHead and end', testBody(generateWriteHeadEndHandler(404), 'qux', 404)
+
   describe 'when handling 5xx responses should do nothing', ->
-    it 'when server calls writeHead and end', notRedirectTestBody(generateWriteHeadEndHandler(503), 'qux', 503)
-    it 'when server calls writeHead, write and end', notRedirectTestBody(generateWriteHeadWriteEndHandler(503), 'barqux', 503)
+    it 'when server calls writeHead and end', testBody(generateWriteHeadEndHandler(503), 'qux', 503)
