@@ -15,7 +15,7 @@ generateWriteEndHandler = -> (req, res) ->
   res.end 'qux'
 
 generateWriteHeadEndHandler = (statusCode = 200) -> (req, res) -> 
-  res.writeHead statusCode, {'location': 'https://' + req.headers.host + req.url}
+  res.writeHead statusCode, {'location': 'https://' + req.headers.host.replace('8000', '8001') + req.url}
   res.end 'qux'
 
 testBody = (handler, expectedBody = 'qux', expectedStatusCode = 200) ->
@@ -35,6 +35,12 @@ describe 'HTTP Please', ->
     it 'when server calls write and end', testBody(generateWriteEndHandler(), 'barqux')
     it 'when server calls writeHead and end', testBody(generateWriteHeadEndHandler())
 
+  describe 'when handling 4xx responses should do nothing', ->
+    it 'when server calls writeHead and end', testBody(generateWriteHeadEndHandler(404), 'qux', 404)
+
+  describe 'when handling 5xx responses should do nothing', ->
+    it 'when server calls writeHead and end', testBody(generateWriteHeadEndHandler(503), 'qux', 503)
+
   describe 'when handling 3xx responses should redirect', ->
     it 'when server calls writeHead and end', (done) ->
       httpsOptions =
@@ -44,23 +50,17 @@ describe 'HTTP Please', ->
       httpsServer = https.createServer(httpsOptions, (req, res) ->
         res.writeHead(200)
         res.end("hello world\n")
-      ).listen(443)
+      ).listen(8001)
 
       handler = generateWriteHeadEndHandler(301)
 
-      server = http.createServer(connect().use(httplease()).use(handler)).listen(80)
+      server = http.createServer(connect().use(httplease(verbose: true)).use(handler)).listen(8000)
 
       process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
-      request 'http://localhost', (err, res, body) ->
+      request {url: 'http://localhost:8000', followRedirect: false}, (err, res, body) ->
         return done err if err
         expect(res.statusCode).to.equal 200
         expect(body).to.equal "hello world\n"
         httpsServer.close()
         server.close()
         done()
-
-  describe 'when handling 4xx responses should do nothing', ->
-    it 'when server calls writeHead and end', testBody(generateWriteHeadEndHandler(404), 'qux', 404)
-
-  describe 'when handling 5xx responses should do nothing', ->
-    it 'when server calls writeHead and end', testBody(generateWriteHeadEndHandler(503), 'qux', 503)

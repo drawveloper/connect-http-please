@@ -1,11 +1,11 @@
 https = require 'https'
+url = require 'url'
 require 'colors'
 
 REDIRECT_STATUS_CODES = [301, 302]
 
 module.exports = (options = {})->
   console.verbose = -> console.log.apply(console, arguments) if options.verbose
-  options.replaceHost or= (h) -> h
   (req, res, next) ->
     # HTTP requests don't have req.connection.encrypted object
     return next() if req.connection.encrypted
@@ -34,15 +34,24 @@ module.exports = (options = {})->
       location = headers?.location or res.getHeader('location')
       return false unless location
 
-      identicalLocation = location.indexOf('https://'+ req.headers.host + req.url) is 0
+      locationUrl = url.parse(location)
+      reqUrl = url.parse('https://'+ req.headers.host + req.url)
+      identicalLocation = reqUrl.hostname is locationUrl.hostname and reqUrl.path is locationUrl.path
       return false unless identicalLocation
 
       # This is a redirect to the exact same url, except with HTTPS protocol
       console.verbose "HTTPlease: follow redirect to", location.yellow
-      req.headers.host = options.host or options.replaceHost(req.headers.host)
+      if options.host
+        req.headers.host = options.host
+      else if options.replaceHost
+        req.headers.host = options.replaceHost(req.headers.host)
+      else
+        req.headers.host = locationUrl.host
+
       requestOptions =
-        host: req.headers.host
-        path: req.url
+        host: locationUrl.hostname
+        port: locationUrl.port
+        path: locationUrl.path
         headers: req.headers
 
       redirectReq = https.request requestOptions, (redirectRes) ->
