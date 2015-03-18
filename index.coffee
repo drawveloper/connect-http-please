@@ -23,6 +23,7 @@ module.exports = (options = {})->
       # Overwrite with no-op so handleRedirect is only called once
       res.writeHead = res.end = ->
 
+      # Check if status code is redirect
       redirectStatusCode = statusCode in REDIRECT_STATUS_CODES
       return false unless redirectStatusCode
 
@@ -31,29 +32,48 @@ module.exports = (options = {})->
         when 2 then headers = arguments[1]
         else headers = null
 
+      # Check if LOCATION header exists
       location = headers?.location or res.getHeader('location')
       return false unless location
 
+      # Check if LOCATION header hostname and path matches original request
       locationUrl = url.parse(location)
       reqUrl = url.parse('https://'+ req.headers.host + req.url)
       identicalLocation = reqUrl.hostname is locationUrl.hostname and reqUrl.path is locationUrl.path
       return false unless identicalLocation
 
-      # This is a redirect to the exact same url, except with HTTPS protocol
-      console.verbose "HTTPlease: follow redirect to", location.yellow
+      console.verbose "HTTPlease: location hostname and url matches request", location.yellow
+
+      # Overwrite destination hostname and port if necessary
       if options.host
-        req.headers.host = options.host
-      else if options.replaceHost
-        req.headers.host = options.replaceHost(req.headers.host)
-      else
-        req.headers.host = locationUrl.host
+        overwrittenUrl = url.parse("https://" + options.host)
+      else if options.rewriteHost
+        overwrittenUrl = url.parse("https://" + options.rewriteHost(req.headers.host))
+
+      # Copy overwritten properties to destination URL
+      if overwrittenUrl
+        locationUrl.hostname = locationUrl.host = overwrittenUrl.hostname
+        locationUrl.port =  overwrittenUrl.port
+        # Add port to host
+        if locationUrl.port
+          locationUrl.host += ':' + locationUrl.port
+
+      # Copy headers
+      headers = {}
+      for k, v of req.headers
+        headers[k] = v
+
+      # Adjust host header based on destination URL
+      headers.host = locationUrl.host
 
       requestOptions =
-        host: locationUrl.hostname
+        hostname: locationUrl.hostname
         port: locationUrl.port
         path: locationUrl.path
-        headers: req.headers
+        headers: headers
 
+      # This is a redirect to the exact same url, except with HTTPS protocol
+      console.verbose "HTTPlease: follow redirect to", ("https://" + locationUrl.host).yellow
       redirectReq = https.request requestOptions, (redirectRes) ->
         restore()
         redirectRes.pipe(res)
