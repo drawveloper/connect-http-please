@@ -76,6 +76,7 @@ module.exports = (options = {})->
       console.verbose "HTTPlease: follow redirect to", ("https://" + locationUrl.host).yellow
       redirectReq = https.request requestOptions, (redirectRes) ->
         restore()
+        res.writeHead(redirectRes.statusCode, redirectRes.headers)
         redirectRes.pipe(res)
 
       redirectReq.on 'error', (err) ->
